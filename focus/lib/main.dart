@@ -1,4 +1,3 @@
-import 'dart:async';
 import 'package:flutter/material.dart';
 import 'focus.dart';
 
@@ -6,11 +5,11 @@ void main() => runApp(const MyApp());
 
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
+
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Focus Background Logger',
-      theme: ThemeData(primarySwatch: Colors.indigo),
+      title: 'Focus Foreground Tracker',
       home: const HomePage(),
     );
   }
@@ -18,58 +17,45 @@ class MyApp extends StatelessWidget {
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
+
   @override
   State<HomePage> createState() => _HomePageState();
 }
 
 class _HomePageState extends State<HomePage> {
-  String? _currentPackage;
-  Timer? _timer;
+  String _currentApp = 'Unknown';
 
   @override
   void initState() {
     super.initState();
-    // Start checking periodically every 3 seconds
-    _startForegroundAppChecker();
-  }
-
-  void _startForegroundAppChecker() {
-    _timer = Timer.periodic(const Duration(seconds: 1), (_) async {
-      final pkg = await FocusDetector.getFocusApp();
-      if (pkg != null && pkg != _currentPackage) {
-        debugPrint("💡 Foreground app changed: $pkg");
-        setState(() => _currentPackage = pkg);
-      } else {
-        debugPrint("📌 Still in: $pkg");
-      }
+    FocusDetector.startListening((pkg) {
+      debugPrint('Foreground app: $pkg');
+      setState(() => _currentApp = pkg);
     });
-  }
-
-  @override
-  void dispose() {
-    _timer?.cancel();
-    super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Focus App Monitor')),
+      appBar: AppBar(title: const Text('Focus Foreground Tracker')),
       body: Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Text(
-              _currentPackage == null
-                  ? 'No app detected yet'
-                  : 'Current foreground app:\n$_currentPackage',
-              textAlign: TextAlign.center,
-              style: const TextStyle(fontSize: 18),
+              'Current Foreground App:',
+              style: Theme.of(context).textTheme.titleLarge,
             ),
-            const SizedBox(height: 24),
+            const SizedBox(height: 10),
+            Text(
+              _currentApp,
+              style: const TextStyle(fontSize: 20),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 30),
             ElevatedButton(
-              onPressed: openUsageAccessSettings,
-              child: const Text('Open Usage Access Settings'),
+              onPressed: openAccessibilitySettings,
+              child: const Text('Enable Accessibility Service'),
             ),
           ],
         ),
