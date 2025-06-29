@@ -12,6 +12,27 @@ class FocusDetector {
       }
     });
   }
+
+  static void setFocusMode(bool enabled) {
+    _channel.invokeMethod('setFocusMode', enabled);
+  }
+
+  static Future<bool> checkOverlayPermission() async {
+    final result = await _channel.invokeMethod('checkOverlayPermission');
+    return result as bool;
+  }
+
+  static Future<void> requestOverlayPermission() async {
+    await _channel.invokeMethod('requestOverlayPermission');
+  }
+
+  static void showOverlayPopup(String packageName) {
+    _channel.invokeMethod('showOverlayPopup', packageName);
+  }
+
+  static void hideOverlayPopup() {
+    _channel.invokeMethod('hideOverlayPopup');
+  }
 }
 
 Future<void> openAccessibilitySettings() async {
