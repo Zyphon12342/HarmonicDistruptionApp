@@ -1,160 +1,75 @@
 package com.raptors.focusapp
 
 import android.content.Context
-import android.graphics.PixelFormat
+import android.graphics.*
+import android.graphics.drawable.GradientDrawable
 import android.os.Build
+import android.text.InputType
 import android.util.Log
-import android.view.Gravity
-import android.view.View
-import android.view.WindowManager
-import android.widget.Button
-import android.widget.TextView
-import android.widget.LinearLayout
+import android.util.TypedValue
+import android.view.*
+import android.widget.*
+import androidx.core.content.ContextCompat
 
 class OverlayService(private val context: Context) {
     private var windowManager: WindowManager? = null
     private var overlayView: View? = null
     private var focusModeEnabled = false
     private var currentPackage: String? = null
-    
+
     init {
         windowManager = context.getSystemService(Context.WINDOW_SERVICE) as WindowManager
         Log.d("OverlayService", "OverlayService initialized")
     }
-    
+
     fun setFocusMode(enabled: Boolean) {
         focusModeEnabled = enabled
         Log.d("OverlayService", "Focus mode set to: $enabled")
-        if (!enabled) {
-            hideOverlay()
-        }
+        if (!enabled) hideOverlay()
     }
-    
+
     fun showOverlay(packageName: String) {
         Log.d("OverlayService", "Attempting to show overlay for: $packageName")
-        
-        if (!focusModeEnabled) {
-            Log.d("OverlayService", "Focus mode disabled, not showing overlay")
-            return
-        }
-        
-        if (packageName.contains("com.raptors.focusapp")) {
-            Log.d("OverlayService", "Own app in foreground, not showing overlay")
+
+        if (!focusModeEnabled || packageName.contains("com.raptors.focusapp")) {
             hideOverlay()
             return
         }
-        
+
         if (currentPackage == packageName && overlayView != null) {
             Log.d("OverlayService", "Overlay already shown for $packageName, skipping")
             return
         }
-        
-        hideOverlay() // Hide existing overlay if any
+
+        hideOverlay()
         currentPackage = packageName
-        
-        overlayView = createOverlayView(packageName)
-        
+
+        overlayView = createOverlayView()
+
         val layoutParams = WindowManager.LayoutParams(
             WindowManager.LayoutParams.MATCH_PARENT,
-            WindowManager.LayoutParams.WRAP_CONTENT,
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            WindowManager.LayoutParams.MATCH_PARENT,
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
                 WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
-            } else {
-                @Suppress("DEPRECATION")
-                WindowManager.LayoutParams.TYPE_SYSTEM_ERROR
-            },
+            else
+                WindowManager.LayoutParams.TYPE_SYSTEM_ERROR,
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
                     WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or
-                    WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED or
-                    WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON or
-                    WindowManager.LayoutParams.FLAG_LAYOUT_INSET_DECOR,
+                    WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
             PixelFormat.TRANSLUCENT
         )
-        
-        layoutParams.gravity = Gravity.TOP or Gravity.CENTER_HORIZONTAL
-        layoutParams.y = 20 // Close to top for visibility
-        
+
+        layoutParams.gravity = Gravity.TOP or Gravity.START
+
         try {
             windowManager?.addView(overlayView, layoutParams)
-            Log.d("OverlayService", "Overlay added successfully for $packageName")
+            Log.d("OverlayService", "Overlay added successfully")
         } catch (e: Exception) {
             Log.e("OverlayService", "Failed to add overlay: ${e.message}", e)
             currentPackage = null
         }
     }
-    
-    private fun createOverlayView(packageName: String): View {
-        Log.d("OverlayService", "Creating overlay view for: $packageName")
-        val overlayView = LinearLayout(context)
-        overlayView.orientation = LinearLayout.VERTICAL
-        overlayView.setBackgroundColor(0xCCFF5722.toInt()) // Semi-transparent orange
-        overlayView.setPadding(40, 40, 40, 40)
-        
-        // Title
-        val titleText = TextView(context)
-        titleText.text = "⚠️ Focus Mode Active"
-        titleText.textSize = 18f
-        titleText.setTextColor(0xFFFFFFFF.toInt())
-        titleText.gravity = Gravity.CENTER
-        overlayView.addView(titleText)
-        
-        // App name
-        val appNameText = TextView(context)
-        val appName = getAppName(packageName)
-        appNameText.text = "Close $appName\nThis app is causing distraction!"
-        appNameText.textSize = 16f
-        appNameText.setTextColor(0xFFFFFFFF.toInt())
-        appNameText.gravity = Gravity.CENTER
-        val appNameMargin = LinearLayout.LayoutParams(
-            LinearLayout.LayoutParams.MATCH_PARENT,
-            LinearLayout.LayoutParams.WRAP_CONTENT
-        )
-        appNameMargin.setMargins(0, 20, 0, 40)
-        appNameText.layoutParams = appNameMargin
-        overlayView.addView(appNameText)
-        
-        // Button container
-        val buttonContainer = LinearLayout(context)
-        buttonContainer.orientation = LinearLayout.HORIZONTAL
-        buttonContainer.gravity = Gravity.CENTER
-        
-        // Close button
-        val closeButton = Button(context)
-        closeButton.text = "Close App"
-        closeButton.setTextColor(0xFFFF5722.toInt())
-        closeButton.setBackgroundColor(0xFFFFFFFF.toInt())
-        closeButton.setOnClickListener {
-            Log.d("OverlayService", "Close button clicked for $packageName")
-            closeApp(packageName)
-            hideOverlay()
-        }
-        
-        // Dismiss button
-        val dismissButton = Button(context)
-        dismissButton.text = "Dismiss"
-        dismissButton.setTextColor(0xFFFFFFFF.toInt())
-        dismissButton.setBackgroundColor(0x00000000) // Transparent
-        dismissButton.setOnClickListener {
-            Log.d("OverlayService", "Dismiss button clicked")
-            hideOverlay()
-        }
-        
-        // Add margins to buttons
-        val buttonMargin = LinearLayout.LayoutParams(
-            LinearLayout.LayoutParams.WRAP_CONTENT,
-            LinearLayout.LayoutParams.WRAP_CONTENT
-        )
-        buttonMargin.setMargins(10, 0, 10, 0)
-        closeButton.layoutParams = buttonMargin
-        dismissButton.layoutParams = buttonMargin
-        
-        buttonContainer.addView(closeButton)
-        buttonContainer.addView(dismissButton)
-        overlayView.addView(buttonContainer)
-        
-        return overlayView
-    }
-    
+
     fun hideOverlay() {
         overlayView?.let { view ->
             try {
@@ -167,27 +82,187 @@ class OverlayService(private val context: Context) {
             currentPackage = null
         }
     }
-    
-    private fun getAppName(packageName: String): String {
-        return try {
-            val packageManager = context.packageManager
-            val applicationInfo = packageManager.getApplicationInfo(packageName, 0)
-            packageManager.getApplicationLabel(applicationInfo).toString()
-        } catch (e: Exception) {
-            Log.e("OverlayService", "Failed to get app name for $packageName: ${e.message}")
-            packageName
-        }
+
+    private fun dpToPx(dp: Float): Int {
+        return TypedValue.applyDimension(
+            TypedValue.COMPLEX_UNIT_DIP,
+            dp,
+            context.resources.displayMetrics
+        ).toInt()
     }
-    
-    private fun closeApp(packageName: String) {
-        try {
-            val homeIntent = android.content.Intent(android.content.Intent.ACTION_MAIN)
-            homeIntent.addCategory(android.content.Intent.CATEGORY_HOME)
-            homeIntent.flags = android.content.Intent.FLAG_ACTIVITY_NEW_TASK
-            context.startActivity(homeIntent)
-            Log.d("OverlayService", "Closed app $packageName by launching home")
-        } catch (e: Exception) {
-            Log.e("OverlayService", "Error closing app $packageName: ${e.message}", e)
+
+    private fun createOverlayView(): View {
+        Log.d("OverlayService", "Creating new popup overlay view")
+
+        val parentLayout = FrameLayout(context)
+
+        // Background with blur effect simulation
+        val backgroundView = View(context)
+        backgroundView.setBackgroundColor(Color.parseColor("#CC141431")) // rgba(20, 20, 49, 0.80)
+        parentLayout.addView(backgroundView, FrameLayout.LayoutParams(
+            FrameLayout.LayoutParams.MATCH_PARENT,
+            FrameLayout.LayoutParams.MATCH_PARENT
+        ))
+
+        // Main Card Container
+        val cardLayout = LinearLayout(context)
+        cardLayout.orientation = LinearLayout.VERTICAL
+        cardLayout.gravity = Gravity.CENTER
+
+        // Card padding: reduce vertical and horizontal padding
+        val paddingVertical = dpToPx(10f) // was 21f
+        val paddingHorizontal = dpToPx(8f) // was 14f
+        cardLayout.setPadding(paddingHorizontal, paddingVertical, paddingHorizontal, paddingVertical)
+
+        // Card Background - Single PNG approach  
+        val cardBackground = ContextCompat.getDrawable(context, R.drawable.frame_bg)
+        if (cardBackground != null) {
+            // Use your Frame-9 PNG background
+            cardLayout.background = cardBackground
+        } else {
+            // Fallback gradient if PNG not available
+            val fallbackBackground = GradientDrawable(
+                GradientDrawable.Orientation.TOP_BOTTOM,
+                intArrayOf(Color.parseColor("#6C64E9"), Color.parseColor("#1A171A"))
+            )
+            fallbackBackground.cornerRadius = dpToPx(29.9f).toFloat()
+            cardLayout.background = fallbackBackground
         }
+        
+        // Add shadow effect (box-shadow: 0px 2.44px 9.15px rgba(0, 0, 0, 0.65))
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+            cardLayout.elevation = dpToPx(9.15f).toFloat()
+        }
+
+        // Card width: 313px converted to dp (keep as is for width)
+        val cardParams = FrameLayout.LayoutParams(
+            dpToPx(313f),
+            dpToPx(260f), // Set a fixed, smaller height for the card
+            Gravity.CENTER
+        )
+
+        // Title Text
+        val titleText = TextView(context).apply {
+            text = "HOLD UP!"
+            setTextColor(Color.parseColor("#F4EAEA"))
+            textSize = 22f // smaller
+            typeface = Typeface.DEFAULT_BOLD
+            gravity = Gravity.CENTER
+            // Add text shadow: 0px 2px 4px rgba(0, 0, 0, 0.41)
+            setShadowLayer(4f, 0f, 2f, Color.parseColor("#69000000"))
+        }
+        val titleParams = LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT,
+            LinearLayout.LayoutParams.WRAP_CONTENT
+        )
+        titleParams.bottomMargin = dpToPx(6f) // increased from 2f
+        cardLayout.addView(titleText, titleParams)
+
+        // Eye Icon - Single PNG approach
+        val eyeIcon = ImageView(context).apply {
+            // Just put eye.png in res/drawable/ folder
+            setImageResource(R.drawable.eye)
+            scaleType = ImageView.ScaleType.CENTER_INSIDE
+        }
+        val eyeParams = LinearLayout.LayoutParams(dpToPx(24f), dpToPx(16f))
+        eyeParams.bottomMargin = dpToPx(4f) // increased from 1f
+        eyeParams.gravity = Gravity.CENTER_HORIZONTAL
+        cardLayout.addView(eyeIcon, eyeParams)
+
+        // Subtitle Text
+        val subtitle = TextView(context).apply {
+            text = "You're currently in focus mode"
+            setTextColor(Color.WHITE)
+            textSize = 7f
+            gravity = Gravity.CENTER
+        }
+        val subtitleParams = LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT,
+            LinearLayout.LayoutParams.WRAP_CONTENT
+        )
+        subtitleParams.bottomMargin = dpToPx(4f) // increased from 1f
+        cardLayout.addView(subtitle, subtitleParams)
+
+        // Question Text
+        val question = TextView(context).apply {
+            text = "What is your motive to open this app?"
+            setTextColor(Color.WHITE)
+            textSize = 9f
+            gravity = Gravity.CENTER
+        }
+        val questionParams = LinearLayout.LayoutParams(
+            dpToPx(200f),
+            LinearLayout.LayoutParams.WRAP_CONTENT
+        )
+        questionParams.bottomMargin = dpToPx(6f) // increased from 2f
+        questionParams.gravity = Gravity.CENTER_HORIZONTAL
+        cardLayout.addView(question, questionParams)
+
+        // Input Field Container
+        val inputContainer = LinearLayout(context).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(dpToPx(5f), 0, dpToPx(5f), 0)
+            background = GradientDrawable().apply {
+                cornerRadius = dpToPx(8f).toFloat()
+                setStroke(dpToPx(0.7f), Color.parseColor("#6C64E9"))
+                setColor(Color.parseColor("#353434"))
+            }
+        }
+        val userInput = EditText(context).apply {
+            hint = "Type here"
+            setHintTextColor(Color.GRAY)
+            setTextColor(Color.WHITE)
+            textSize = 9f
+            inputType = InputType.TYPE_CLASS_TEXT
+            setBackgroundColor(Color.TRANSPARENT)
+        }
+        inputContainer.addView(userInput, LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT,
+            LinearLayout.LayoutParams.WRAP_CONTENT
+        ))
+        val inputContainerParams = LinearLayout.LayoutParams(
+            dpToPx(140f),
+            dpToPx(18f)
+        )
+        inputContainerParams.bottomMargin = dpToPx(4f) // increased from 2f
+        inputContainerParams.gravity = Gravity.CENTER_HORIZONTAL
+        cardLayout.addView(inputContainer, inputContainerParams)
+
+        // Exit Button
+        val exitButton = LinearLayout(context).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER
+            setPadding(dpToPx(5f), 0, dpToPx(5f), 0)
+            background = GradientDrawable().apply {
+                cornerRadius = dpToPx(8f).toFloat()
+                setColor(Color.parseColor("#6C64E9"))
+            }
+            setOnClickListener {
+                Log.d("OverlayService", "Exit button clicked, closing overlay")
+                hideOverlay()
+            }
+        }
+        val exitButtonText = TextView(context).apply {
+            text = "EXIT"
+            setTextColor(Color.WHITE)
+            textSize = 9f
+            gravity = Gravity.CENTER
+            typeface = Typeface.DEFAULT_BOLD
+        }
+        exitButton.addView(exitButtonText, LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT,
+            LinearLayout.LayoutParams.WRAP_CONTENT
+        ))
+        val exitButtonParams = LinearLayout.LayoutParams(
+            dpToPx(140f),
+            dpToPx(18f)
+        )
+        exitButtonParams.gravity = Gravity.CENTER_HORIZONTAL
+        cardLayout.addView(exitButton, exitButtonParams)
+
+        parentLayout.addView(cardLayout, cardParams)
+
+        return parentLayout
     }
 }
