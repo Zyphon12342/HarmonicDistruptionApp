@@ -7,6 +7,7 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_database/firebase_database.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:android_intent_plus/android_intent.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'focus.dart';
 
 Future<void> main() async {
@@ -14,6 +15,72 @@ Future<void> main() async {
   await dotenv.load();
   await Firebase.initializeApp();
   runApp(const SynapseApp());
+}
+
+class SplashScreen extends StatefulWidget {
+  const SplashScreen({super.key});
+
+  @override
+  State<SplashScreen> createState() => _SplashScreenState();
+}
+
+class _SplashScreenState extends State<SplashScreen> {
+  @override
+  void initState() {
+    super.initState();
+    _checkSavedCode();
+  }
+
+  Future<void> _checkSavedCode() async {
+    final prefs = await SharedPreferences.getInstance();
+    final savedCode = prefs.getString('user_code');
+
+    if (savedCode != null) {
+      // Verify the code is still valid
+      try {
+        final dbUrl = dotenv.env['FIREBASE_DB_URL'] ?? '';
+        final dbRef =
+            FirebaseDatabase.instanceFor(
+              app: Firebase.app(),
+              databaseURL: dbUrl,
+            ).ref();
+        final snapshot = await dbRef.child('users/$savedCode').get();
+
+        if (snapshot.exists) {
+          Navigator.of(context).pushReplacement(
+            MaterialPageRoute(builder: (_) => HomePage(code: savedCode)),
+          );
+          return;
+        }
+      } catch (e) {
+        // If verification fails, clear the saved code
+        await prefs.remove('user_code');
+      }
+    }
+
+    // If no valid saved code, go to code entry
+    Navigator.of(
+      context,
+    ).pushReplacement(MaterialPageRoute(builder: (_) => const CodeEntryPage()));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: Container(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            colors: [Color(0xFF141431), Color(0xFF1A171A)],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+        ),
+        child: const Center(
+          child: CircularProgressIndicator(color: Color(0xFF6C64E9)),
+        ),
+      ),
+    );
+  }
 }
 
 class SynapseApp extends StatelessWidget {
@@ -29,7 +96,7 @@ class SynapseApp extends StatelessWidget {
         fontFamily: 'Montserrat',
       ),
       debugShowCheckedModeBanner: false,
-      home: const CodeEntryPage(),
+      home: const SplashScreen(),
     );
   }
 }
@@ -54,14 +121,19 @@ class _CodeEntryPageState extends State<CodeEntryPage> {
     final code = _controller.text.trim();
     try {
       final dbUrl = dotenv.env['FIREBASE_DB_URL'] ?? '';
-      final dbRef = FirebaseDatabase.instanceFor(
-        app: Firebase.app(),
-        databaseURL: dbUrl,
-      ).ref();
+      final dbRef =
+          FirebaseDatabase.instanceFor(
+            app: Firebase.app(),
+            databaseURL: dbUrl,
+          ).ref();
       final snapshot = await dbRef.child('users/$code').get();
       if (snapshot.exists) {
+        // Save the code to SharedPreferences
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setString('user_code', code);
+
         Navigator.of(context).pushReplacement(
-          MaterialPageRoute(builder: (_) => const HomePage()),
+          MaterialPageRoute(builder: (_) => HomePage(code: code)),
         );
       } else {
         setState(() => _error = 'Invalid code');
@@ -85,10 +157,7 @@ class _CodeEntryPageState extends State<CodeEntryPage> {
               gradient: LinearGradient(
                 begin: Alignment(cos(angle), sin(angle)),
                 end: Alignment(-cos(angle), -sin(angle)),
-                colors: const [
-                  Color(0xFF141431),
-                  Color(0xFF1A171A),
-                ],
+                colors: const [Color(0xFF141431), Color(0xFF1A171A)],
               ),
             ),
             child: child,
@@ -104,9 +173,9 @@ class _CodeEntryPageState extends State<CodeEntryPage> {
                   Text(
                     'Enter your unique code',
                     style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                          color: Colors.white,
-                          fontWeight: FontWeight.bold,
-                        ),
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
                   const SizedBox(height: 32),
                   TextField(
@@ -115,7 +184,9 @@ class _CodeEntryPageState extends State<CodeEntryPage> {
                     style: const TextStyle(color: Colors.white),
                     decoration: InputDecoration(
                       hintText: 'Unique code from PC',
-                      hintStyle: TextStyle(color: Colors.white.withOpacity(0.5)),
+                      hintStyle: TextStyle(
+                        color: Colors.white.withOpacity(0.5),
+                      ),
                       filled: true,
                       fillColor: Colors.white.withOpacity(0.08),
                       border: OutlineInputBorder(
@@ -139,25 +210,29 @@ class _CodeEntryPageState extends State<CodeEntryPage> {
                           borderRadius: BorderRadius.circular(16),
                         ),
                         elevation: 0,
-                        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 18,
+                          vertical: 12,
+                        ),
                       ),
-                      child: _loading
-                          ? const SizedBox(
-                              width: 24,
-                              height: 24,
-                              child: CircularProgressIndicator(
-                                color: Colors.white,
-                                strokeWidth: 2.5,
+                      child:
+                          _loading
+                              ? const SizedBox(
+                                width: 24,
+                                height: 24,
+                                child: CircularProgressIndicator(
+                                  color: Colors.white,
+                                  strokeWidth: 2.5,
+                                ),
+                              )
+                              : const Text(
+                                'Continue',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w600,
+                                ),
                               ),
-                            )
-                          : const Text(
-                              'Continue',
-                              style: TextStyle(
-                                color: Colors.white,
-                                fontSize: 16,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
                     ),
                   ),
                 ],
@@ -171,7 +246,9 @@ class _CodeEntryPageState extends State<CodeEntryPage> {
 }
 
 class HomePage extends StatefulWidget {
-  const HomePage({super.key});
+  final String code;
+
+  const HomePage({super.key, required this.code});
   @override
   State<HomePage> createState() => _HomePageState();
 }
@@ -185,7 +262,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
   late final DatabaseReference _dbRootRef;
   late final DatabaseReference _focusModeRef;
   late final Stream<DatabaseEvent> _focusModeStream;
-  
+
   late AnimationController _slideController;
   late AnimationController _gradientController;
   late Animation<Offset> _slideAnimation;
@@ -194,35 +271,38 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
   @override
   void initState() {
     super.initState();
-    
+
     // Initialize animations
     _slideController = AnimationController(
       duration: const Duration(milliseconds: 800),
       vsync: this,
     );
-    
+
     _gradientController = AnimationController(
       vsync: this,
       duration: const Duration(seconds: 20),
     )..repeat();
-    
+
     _slideAnimation = Tween<Offset>(
       begin: const Offset(0, 0.5),
       end: Offset.zero,
-    ).animate(CurvedAnimation(parent: _slideController, curve: Curves.elasticOut));
-    
+    ).animate(
+      CurvedAnimation(parent: _slideController, curve: Curves.elasticOut),
+    );
+
     _fadeAnimation = Tween<double>(begin: 0, end: 1).animate(
       CurvedAnimation(parent: _slideController, curve: Curves.easeInOut),
     );
-    
+
     _slideController.forward();
-    
+
     final dbUrl = dotenv.env['FIREBASE_DB_URL'] ?? '';
-    _dbRootRef = FirebaseDatabase.instanceFor(
-      app: Firebase.app(),
-      databaseURL: dbUrl,
-    ).ref();
-    _focusModeRef = _dbRootRef.child('users/User0/settings/focusMode');
+    _dbRootRef =
+        FirebaseDatabase.instanceFor(
+          app: Firebase.app(),
+          databaseURL: dbUrl,
+        ).ref();
+    _focusModeRef = _dbRootRef.child('users/${widget.code}/settings/focusMode');
     _focusModeStream = _focusModeRef.onValue;
     _focusModeStream.listen((event) {
       final val = event.snapshot.value;
@@ -231,7 +311,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
         FocusDetector.setFocusMode(val);
       }
     });
-    requestExactAlarmPermission();
+    // requestExactAlarmPermission();
     startFocusDetection();
     _checkOverlayPermission();
   }
@@ -248,7 +328,8 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
       setState(() => _currentApp = pkg);
       final now = DateTime.now();
       if (_lastOverlayTrigger != null &&
-          now.difference(_lastOverlayTrigger!).inMilliseconds < 500) return;
+          now.difference(_lastOverlayTrigger!).inMilliseconds < 500)
+        return;
       if (_focusModeEnabled) {
         bool canOverlay = await FocusDetector.checkOverlayPermission();
         if (!canOverlay) {
@@ -292,12 +373,149 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
     // Extract app name from package name for better display
     if (packageName.contains('.')) {
       final parts = packageName.split('.');
-      return parts.last.replaceAll('_', ' ').split(' ')
-          .map((word) => word.isNotEmpty ? 
-              '${word[0].toUpperCase()}${word.substring(1)}' : '')
+      return parts.last
+          .replaceAll('_', ' ')
+          .split(' ')
+          .map(
+            (word) =>
+                word.isNotEmpty
+                    ? '${word[0].toUpperCase()}${word.substring(1)}'
+                    : '',
+          )
           .join(' ');
     }
     return packageName;
+  }
+
+  Future<void> _showChangeCodeDialog() async {
+    final TextEditingController dialogController = TextEditingController();
+    bool isLoading = false;
+    String? error;
+
+    await showDialog(
+      context: context,
+      builder:
+          (context) => StatefulBuilder(
+            builder:
+                (context, setDialogState) => AlertDialog(
+                  backgroundColor: const Color(0xFF1A171A),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  title: const Text(
+                    'Change Code',
+                    style: TextStyle(color: Colors.white),
+                  ),
+                  content: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      TextField(
+                        controller: dialogController,
+                        enabled: !isLoading,
+                        style: const TextStyle(color: Colors.white),
+                        decoration: InputDecoration(
+                          hintText: 'Enter new code',
+                          hintStyle: TextStyle(
+                            color: Colors.white.withOpacity(0.5),
+                          ),
+                          filled: true,
+                          fillColor: Colors.white.withOpacity(0.08),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            borderSide: BorderSide.none,
+                          ),
+                          errorText: error,
+                        ),
+                      ),
+                    ],
+                  ),
+                  actions: [
+                    TextButton(
+                      onPressed:
+                          isLoading ? null : () => Navigator.pop(context),
+                      child: const Text(
+                        'Cancel',
+                        style: TextStyle(color: Colors.white70),
+                      ),
+                    ),
+                    ElevatedButton(
+                      onPressed:
+                          isLoading
+                              ? null
+                              : () async {
+                                setDialogState(() {
+                                  isLoading = true;
+                                  error = null;
+                                });
+
+                                final newCode = dialogController.text.trim();
+                                if (newCode.isEmpty) {
+                                  setDialogState(() {
+                                    error = 'Code cannot be empty';
+                                    isLoading = false;
+                                  });
+                                  return;
+                                }
+
+                                try {
+                                  final dbUrl =
+                                      dotenv.env['FIREBASE_DB_URL'] ?? '';
+                                  final dbRef =
+                                      FirebaseDatabase.instanceFor(
+                                        app: Firebase.app(),
+                                        databaseURL: dbUrl,
+                                      ).ref();
+                                  final snapshot =
+                                      await dbRef.child('users/$newCode').get();
+
+                                  if (snapshot.exists) {
+                                    // Save new code
+                                    final prefs =
+                                        await SharedPreferences.getInstance();
+                                    await prefs.setString('user_code', newCode);
+
+                                    // Navigate to new HomePage with new code
+                                    Navigator.pop(context); // Close dialog
+                                    Navigator.of(context).pushReplacement(
+                                      MaterialPageRoute(
+                                        builder: (_) => HomePage(code: newCode),
+                                      ),
+                                    );
+                                  } else {
+                                    setDialogState(() {
+                                      error = 'Invalid code';
+                                      isLoading = false;
+                                    });
+                                  }
+                                } catch (e) {
+                                  setDialogState(() {
+                                    error = 'Error: $e';
+                                    isLoading = false;
+                                  });
+                                }
+                              },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF6C64E9),
+                      ),
+                      child:
+                          isLoading
+                              ? const SizedBox(
+                                width: 16,
+                                height: 16,
+                                child: CircularProgressIndicator(
+                                  color: Colors.white,
+                                  strokeWidth: 2,
+                                ),
+                              )
+                              : const Text(
+                                'Change',
+                                style: TextStyle(color: Colors.white),
+                              ),
+                    ),
+                  ],
+                ),
+          ),
+    );
   }
 
   @override
@@ -312,10 +530,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
               gradient: LinearGradient(
                 begin: Alignment(cos(angle), sin(angle)),
                 end: Alignment(-cos(angle), -sin(angle)),
-                colors: const [
-                  Color(0xFF141431),
-                  Color(0xFF1A171A),
-                ],
+                colors: const [Color(0xFF141431), Color(0xFF1A171A)],
               ),
             ),
             child: child,
@@ -346,24 +561,37 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                             ),
                           ),
                           const SizedBox(width: 16),
-                          Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                'Synapse',
-                                style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                                  color: Colors.white,
-                                  fontWeight: FontWeight.bold,
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Synapse',
+                                  style: Theme.of(
+                                    context,
+                                  ).textTheme.headlineSmall?.copyWith(
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.bold,
+                                  ),
                                 ),
-                              ),
-                              Text(
-                                'Stay focused, stay productive',
-                                style: TextStyle(
-                                  color: Colors.white.withOpacity(0.6),
-                                  fontSize: 14,
+                                Text(
+                                  'Stay focused, stay productive',
+                                  style: TextStyle(
+                                    color: Colors.white.withOpacity(0.6),
+                                    fontSize: 14,
+                                  ),
                                 ),
-                              ),
-                            ],
+                              ],
+                            ),
+                          ),
+                          IconButton(
+                            onPressed: _showChangeCodeDialog,
+                            icon: const Icon(
+                              Icons.edit,
+                              color: Colors.white,
+                              size: 22,
+                            ),
+                            tooltip: 'Change Code',
                           ),
                         ],
                       ),
@@ -379,7 +607,10 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                           Expanded(
                             flex: 2,
                             child: Padding(
-                              padding: const EdgeInsets.symmetric(vertical: 36, horizontal: 0),
+                              padding: const EdgeInsets.symmetric(
+                                vertical: 36,
+                                horizontal: 0,
+                              ),
                               child: Column(
                                 mainAxisAlignment: MainAxisAlignment.center,
                                 children: [
@@ -388,15 +619,25 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                                     mainAxisAlignment: MainAxisAlignment.center,
                                     children: [
                                       Icon(
-                                        _focusModeEnabled ? Icons.check_circle : Icons.cancel,
-                                        color: _focusModeEnabled ? Color(0xFF6C64E9) : Colors.redAccent,
+                                        _focusModeEnabled
+                                            ? Icons.check_circle
+                                            : Icons.cancel,
+                                        color:
+                                            _focusModeEnabled
+                                                ? Color(0xFF6C64E9)
+                                                : Colors.redAccent,
                                         size: 22,
                                       ),
                                       const SizedBox(width: 8),
                                       Text(
-                                        _focusModeEnabled ? "Focus Mode: ON" : "Focus Mode: OFF",
+                                        _focusModeEnabled
+                                            ? "Focus Mode: ON"
+                                            : "Focus Mode: OFF",
                                         style: TextStyle(
-                                          color: _focusModeEnabled ? Color(0xFF6C64E9) : Colors.redAccent,
+                                          color:
+                                              _focusModeEnabled
+                                                  ? Color(0xFF6C64E9)
+                                                  : Colors.redAccent,
                                           fontSize: 16,
                                           fontWeight: FontWeight.w600,
                                         ),
@@ -526,7 +767,10 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                     borderRadius: BorderRadius.circular(16),
                   ),
                   elevation: 0,
-                  padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 18,
+                    vertical: 12,
+                  ),
                 ),
               ),
             ),
