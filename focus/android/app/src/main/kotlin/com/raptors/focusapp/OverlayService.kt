@@ -61,6 +61,11 @@ class OverlayService(private val context: Context) {
 
         layoutParams.gravity = Gravity.TOP or Gravity.START
 
+        // Ensure the overlay is touchable and the EditText can receive input
+        layoutParams.flags = layoutParams.flags and WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE.inv()
+        layoutParams.flags = layoutParams.flags and WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL.inv()
+        layoutParams.softInputMode = WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE
+
         try {
             windowManager?.addView(overlayView, layoutParams)
             Log.d("OverlayService", "Overlay added successfully")
@@ -216,6 +221,9 @@ class OverlayService(private val context: Context) {
             textSize = 9f
             inputType = InputType.TYPE_CLASS_TEXT
             setBackgroundColor(Color.TRANSPARENT)
+            isFocusable = true
+            isFocusableInTouchMode = true
+            isEnabled = true
         }
         inputContainer.addView(userInput, LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.MATCH_PARENT,
