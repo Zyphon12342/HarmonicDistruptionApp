@@ -13,11 +13,11 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await dotenv.load();
   await Firebase.initializeApp();
-  runApp(const MyApp());
+  runApp(const SynapseApp());
 }
 
-class MyApp extends StatelessWidget {
-  const MyApp({super.key});
+class SynapseApp extends StatelessWidget {
+  const SynapseApp({super.key});
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
@@ -29,7 +29,143 @@ class MyApp extends StatelessWidget {
         fontFamily: 'Montserrat',
       ),
       debugShowCheckedModeBanner: false,
-      home: const HomePage(),
+      home: const CodeEntryPage(),
+    );
+  }
+}
+
+class CodeEntryPage extends StatefulWidget {
+  const CodeEntryPage({super.key});
+
+  @override
+  State<CodeEntryPage> createState() => _CodeEntryPageState();
+}
+
+class _CodeEntryPageState extends State<CodeEntryPage> {
+  final TextEditingController _controller = TextEditingController();
+  bool _loading = false;
+  String? _error;
+
+  Future<void> _checkCode() async {
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+    final code = _controller.text.trim();
+    try {
+      final dbUrl = dotenv.env['FIREBASE_DB_URL'] ?? '';
+      final dbRef = FirebaseDatabase.instanceFor(
+        app: Firebase.app(),
+        databaseURL: dbUrl,
+      ).ref();
+      final snapshot = await dbRef.child('users/$code').get();
+      if (snapshot.exists) {
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute(builder: (_) => const HomePage()),
+        );
+      } else {
+        setState(() => _error = 'Invalid code');
+      }
+    } catch (e) {
+      setState(() => _error = 'Error: $e');
+    } finally {
+      setState(() => _loading = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final angle = DateTime.now().millisecondsSinceEpoch / 1000 * 2 * pi / 20;
+    return Scaffold(
+      body: AnimatedBuilder(
+        animation: Listenable.merge([]), // dummy to force rebuild
+        builder: (context, child) {
+          return Container(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment(cos(angle), sin(angle)),
+                end: Alignment(-cos(angle), -sin(angle)),
+                colors: const [
+                  Color(0xFF141431),
+                  Color(0xFF1A171A),
+                ],
+              ),
+            ),
+            child: child,
+          );
+        },
+        child: SafeArea(
+          child: Center(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 32),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text(
+                    'Enter your unique code',
+                    style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                        ),
+                  ),
+                  const SizedBox(height: 32),
+                  TextField(
+                    controller: _controller,
+                    enabled: !_loading,
+                    style: const TextStyle(color: Colors.white),
+                    decoration: InputDecoration(
+                      hintText: 'Unique code from PC',
+                      hintStyle: TextStyle(color: Colors.white.withOpacity(0.5)),
+                      filled: true,
+                      fillColor: Colors.white.withOpacity(0.08),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(16),
+                        borderSide: BorderSide.none,
+                      ),
+                      errorText: _error,
+                    ),
+                    textInputAction: TextInputAction.done,
+                    onSubmitted: (_) => _checkCode(),
+                  ),
+                  const SizedBox(height: 24),
+                  SizedBox(
+                    width: double.infinity,
+                    height: 48,
+                    child: ElevatedButton(
+                      onPressed: _loading ? null : _checkCode,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF6C64E9),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                        elevation: 0,
+                        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+                      ),
+                      child: _loading
+                          ? const SizedBox(
+                              width: 24,
+                              height: 24,
+                              child: CircularProgressIndicator(
+                                color: Colors.white,
+                                strokeWidth: 2.5,
+                              ),
+                            )
+                          : const Text(
+                              'Continue',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 16,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
     );
   }
 }
@@ -214,7 +350,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                'Focus Tracker',
+                                'Synapse',
                                 style: Theme.of(context).textTheme.headlineSmall?.copyWith(
                                   color: Colors.white,
                                   fontWeight: FontWeight.bold,
